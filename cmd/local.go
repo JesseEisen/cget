@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"cget/copy"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -70,6 +71,30 @@ func (li *LocalInfo) SearchLocal() {
 	wg.Wait()
 }
 
+func (li *LocalInfo) searchPath(dir string) {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, file := range files {
+		ddir := filepath.Join(dir, file.Name())
+		if file.Name() == li.slibname {
+			Mutex.Lock()
+			li.sresult = append(li.sresult, ddir)
+			Mutex.Unlock()
+		} else if li.fuzzy == true {
+			if strings.Contains(file.Name(), li.slibname) {
+				Mutex.Lock()
+				li.sresult = append(li.sresult, ddir)
+				Mutex.Unlock()
+			}
+		}
+	}
+
+	defer wg.Done()
+}
+
 func (li *LocalInfo) InstallLocal() {
 	// for install, we cannot use fuzzy, so if user define the -f
 	// we need to toggle it to false
@@ -87,37 +112,14 @@ func (li *LocalInfo) InstallLocal() {
 	}
 }
 
-func (li *LocalInfo) searchPath(dir string) {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, file := range files {
-		if file.Name() == li.slibname {
-			Mutex.Lock()
-			li.sresult = append(li.sresult, dir+file.Name())
-			Mutex.Unlock()
-			fmt.Printf("\t Find %s: %s\n", dir, file.Name())
-		} else if li.fuzzy == true {
-			if strings.Contains(file.Name(), li.slibname) {
-				Mutex.Lock()
-				li.sresult = append(li.sresult, dir+file.Name())
-				Mutex.Unlock()
-				fmt.Printf("\t Find %s: %s\n", dir, file.Name())
-			}
-		}
-	}
-
-	defer wg.Done()
-}
-
 func copyToCurrent(source string) {
 	fmt.Printf("dir is %s\n", source)
 	current, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	copy.Copy(source, current)
 	fmt.Printf("current dir is: %s\n", current)
 }
 
