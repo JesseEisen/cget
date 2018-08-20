@@ -26,12 +26,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
+type LocalInfo struct {
 	slibname string
 	ilibname string
 	fuzzy    bool
 	sresult  []string
-)
+}
+
+var Li *LocalInfo
 
 var (
 	wg    sync.WaitGroup
@@ -44,19 +46,16 @@ var localCmd = &cobra.Command{
 	Short: "search and install from local",
 	Long:  `use this command to install local library`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if slibname != "" {
-			searchLocal(slibname)
+		if Li.slibname != "" {
+			Li.SearchLocal()
 		}
-		if ilibname != "" {
-			installLocal(ilibname)
+		if Li.ilibname != "" {
+			Li.InstallLocal()
 		}
 	},
 }
 
-/*
- * search in CGET_PATH, the PATH is like the PATH
- */
-func searchLocal(slibname string) {
+func (li *LocalInfo) SearchLocal() {
 	path := os.Getenv("CGET_PATH")
 	if path == "" {
 		path = "~/.cget/"
@@ -66,28 +65,44 @@ func searchLocal(slibname string) {
 	paths := strings.Split(path, ":")
 	wg.Add(len(paths))
 	for _, target := range paths {
-		go searchPath(target, slibname)
+		go li.searchPath(target)
 	}
-
 	wg.Wait()
 }
 
-func searchPath(dir, libname string) {
+func (li *LocalInfo) InstallLocal() {
+	// for install, we cannot use fuzzy, so if user define the -f
+	// we need to toggle it to false
+	li.fuzzy = false
+
+	li.SearchLocal()
+	if len(li.sresult) == 0 {
+		fmt.Println("Can not install this lib, please check the libname")
+		return
+	}
+
+	fmt.Println("Install...")
+	for _, source := range li.sresult {
+		copyToCurrent(source)
+	}
+}
+
+func (li *LocalInfo) searchPath(dir string) {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, file := range files {
-		if file.Name() == libname {
+		if file.Name() == li.slibname {
 			Mutex.Lock()
-			sresult = append(sresult, dir+file.Name())
+			li.sresult = append(li.sresult, dir+file.Name())
 			Mutex.Unlock()
 			fmt.Printf("\t Find %s: %s\n", dir, file.Name())
-		} else if fuzzy == true {
-			if strings.Contains(file.Name(), libname) {
+		} else if li.fuzzy == true {
+			if strings.Contains(file.Name(), li.slibname) {
 				Mutex.Lock()
-				sresult = append(sresult, dir+file.Name())
+				li.sresult = append(li.sresult, dir+file.Name())
 				Mutex.Unlock()
 				fmt.Printf("\t Find %s: %s\n", dir, file.Name())
 			}
@@ -106,24 +121,6 @@ func copyToCurrent(source string) {
 	fmt.Printf("current dir is: %s\n", current)
 }
 
-func installLocal(ilibname string) {
-	// for install, we cannot use fuzzy, so if user define the -f
-	// we need to toggle it to false
-	fuzzy = false
-
-	searchLocal(ilibname)
-	if len(sresult) == 0 {
-		fmt.Println("Can not install this lib, please check the libname")
-		return
-	}
-
-	fmt.Println("Install...")
-	for _, source := range sresult {
-		copyToCurrent(source)
-	}
-
-}
-
 func init() {
 	rootCmd.AddCommand(localCmd)
 
@@ -136,7 +133,7 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	//localCmd.Flags().BoolVarP(&tg, "toggle", "t", false, "Help message for toggle")
-	localCmd.Flags().StringVarP(&slibname, "search", "s", "", "search library")
-	localCmd.Flags().StringVarP(&ilibname, "install", "i", "", "install library")
-	localCmd.Flags().BoolVarP(&fuzzy, "fuzzy", "f", false, "fuzzy search and install")
+	localCmd.Flags().StringVarP(&Li.slibname, "search", "s", "", "search library")
+	localCmd.Flags().StringVarP(&Li.ilibname, "install", "i", "", "install library")
+	localCmd.Flags().BoolVarP(&Li.fuzzy, "fuzzy", "f", false, "fuzzy search and install")
 }
