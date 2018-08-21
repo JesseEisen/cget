@@ -114,7 +114,8 @@ func (li *LocalInfo) InstallLocal() {
 
 func copyToCurrent(source string) {
 	fmt.Printf("dir is %s\n", source)
-	current, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	//current, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	current, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
